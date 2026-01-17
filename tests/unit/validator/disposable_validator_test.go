@@ -57,8 +57,8 @@ func TestDisposableValidatorNormalizationAndSubdomains(t *testing.T) {
 		{"tempmail.com.", true},
 		{"foo.tempmail.com", true},
 		{"sub.mailinator.com", true},
-		{"other.mailinator.com", false},
-		{"mailinator.com", false},
+		{"other.mailinator.com", true}, // any subdomain of mailinator.com is blocked
+		{"mailinator.com", true},       // the registrable domain itself is blocked
 	}
 
 	for _, tt := range tests {

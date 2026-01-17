@@ -49,7 +49,8 @@ func NewDisposableValidatorWithDomains(domains []string) *DisposableValidator {
 			continue
 		}
 		disposableDomains[normalized] = struct{}{}
-		if registrable, err := publicsuffix.EffectiveTLDPlusOne(normalized); err == nil && registrable == normalized {
+		// Always extract and store the registrable domain for subdomain matching
+		if registrable, err := publicsuffix.EffectiveTLDPlusOne(normalized); err == nil {
 			registrableDomains[registrable] = struct{}{}
 		}
 	}
@@ -74,26 +75,82 @@ func (v *DisposableValidator) Validate(domain string) bool {
 	if normalized == "" {
 		return false
 	}
+
+	// Check exact match in disposable domains
 	if _, exists := v.disposableDomains[normalized]; exists {
 		return true
 	}
+
+	// Get the registrable domain (e.g., foo.bar.tempmail.com -> tempmail.com)
 	registrable, err := publicsuffix.EffectiveTLDPlusOne(normalized)
 	if err != nil {
 		return false
 	}
+
+	// Check if the registrable domain is blocked
 	_, exists := v.registrableDomains[registrable]
 	return exists
 }
 
+// normalizeDomain lowercases and trims the domain.
+// IDN conversion only happens for non-ASCII domains.
 func normalizeDomain(domain string) string {
+	if len(domain) == 0 {
+		return ""
+	}
+
 	trimmed := strings.TrimSpace(domain)
 	trimmed = strings.TrimRight(trimmed, ".")
 	if trimmed == "" {
 		return ""
 	}
+
+	// Fast path: ASCII-only domains (99% of cases)
+	if isASCII(trimmed) {
+		return toLowerASCII(trimmed)
+	}
+
+	// IDN conversion for international domains
 	ascii, err := idna.Lookup.ToASCII(trimmed)
 	if err != nil {
+		// Fallback: use strings.ToLower which handles Unicode
 		return strings.ToLower(trimmed)
 	}
-	return strings.ToLower(ascii)
+	// ToASCII output is always ASCII, so use efficient lowercase
+	return toLowerASCII(ascii)
+}
+
+// isASCII checks if a string contains only ASCII characters
+func isASCII(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] > 127 {
+			return false
+		}
+	}
+	return true
+}
+
+// toLowerASCII lowercases ASCII strings efficiently
+func toLowerASCII(s string) string {
+	// Check if already lowercase
+	hasUpper := false
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 'A' && s[i] <= 'Z' {
+			hasUpper = true
+			break
+		}
+	}
+	if !hasUpper {
+		return s
+	}
+
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return string(b)
 }
