@@ -75,8 +75,8 @@ func main() {
 	apiMux.HandleFunc("/typo-suggestions", handler.HandleTypoSuggestions)
 	apiMux.HandleFunc("/status", handler.HandleStatus)
 
-	// Wrap API routes with monitoring
-	monitoredHandler := monitoring.MetricsMiddleware(apiMux)
+	// Wrap API routes with CORS and monitoring
+	monitoredHandler := monitoring.MetricsMiddleware(monitoring.CORSMiddleware(apiMux))
 	finalMux.Handle("/api/", http.StripPrefix("/api", monitoredHandler))
 
 	// Register metrics endpoint
